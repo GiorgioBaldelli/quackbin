@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Read Paste - QuackBin</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+        <style>
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+            }
+            h1 {
+                color: #61dafb;
+            }
+            input[type="text"],
+            input[type="password"] {
+                width: calc(100% - 22px);
+                height: 20px;
+                padding: 10px;
+                margin-bottom: 10px;
+                background-color: #2d2d2d;
+                border: 1px solid #3e3e3e;
+                color: #d4d4d4;
+            }
+            button {
+                background-color: #61dafb;
+                color: #1e1e1e;
+                border: none;
+                padding: 10px 20px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            }
+            button:hover {
+                background-color: #4fa8d5;
+            }
+            #pasteContent {
+                width: calc(100% - 22px);
+                min-height: 200px;
+                margin-top: 20px;
+                padding: 10px;
+                border: 1px solid #3e3e3e;
+                background-color: #2d2d2d;
+                white-space: pre-wrap;
+                font-family: "Courier New", Courier, monospace;
+            }
+            nav {
+                margin-bottom: 20px;
+            }
+            nav a {
+                color: #61dafb;
+                text-decoration: none;
+                margin-right: 10px;
+            }
+            nav a:hover {
+                text-decoration: underline;
+            }
+            #passwordInput {
+                display: none;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <nav><a href="/">Create Paste</a> | <a href="/read">Read Paste</a></nav>
+        <h1>QuackBin 🦆</h1>
+        <input type="text" id="pasteId" placeholder="Enter paste ID" />
+        <button onclick="readPaste()">Read Paste</button>
+        <div id="passwordInput">
+            <input
+                type="password"
+                id="pastePassword"
+                placeholder="Enter password for private paste"
+            />
+            <button onclick="submitPassword()">Submit Password</button>
+        </div>
+        <div id="pasteContent"></div>
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const urlParams = new URLSearchParams(window.location.search);
+                const pasteId = urlParams.get("id");
+                if (pasteId) {
+                    document.getElementById("pasteId").value = pasteId;
+                    readPaste();
+                }
+            });
+
+            function decrypt(encryptedContent, key) {
+                return CryptoJS.AES.decrypt(encryptedContent, key).toString(
+                    CryptoJS.enc.Utf8,
+                );
+            }
+
+            async function readPaste() {
+                const id = document.getElementById("pasteId").value;
+                const key = window.location.hash.substr(1);
+                try {
+                    const response = await fetch(`/api/paste/${id}`);
+                    if (response.status === 401) {
+                        document.getElementById("passwordInput").style.display =
+                            "block";
+                        return;
+                    }
+                    if (!response.ok) {
+                        throw new Error("Paste not found");
+                    }
+                    const data = await response.json();
+                    displayPaste(data, key);
+                } catch (error) {
+                    document.getElementById("pasteContent").innerHTML =
+                        `<p>Error: ${error.message}</p>`;
+                }
+            }
+
+            async function submitPassword() {
+                const id = document.getElementById("pasteId").value;
+                const password = document.getElementById("pastePassword").value;
+                const key = window.location.hash.substr(1);
+                try {
+                    const response = await fetch(`/api/paste/${id}`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            password: CryptoJS.SHA256(password).toString(),
+                        }),
+                    });
+                    if (!response.ok) {
+                        throw new Error("Incorrect password");
+                    }
+                    const data = await response.json();
+                    displayPaste(data, key);
+                } catch (error) {
+                    document.getElementById("pasteContent").innerHTML =
+                        `<p>Error: ${error.message}</p>`;
+                }
+            }
+
+            function displayPaste(data, key) {
+                document.getElementById("passwordInput").style.display = "none";
+                try {
+                    const decryptedContent = decrypt(data.content, key);
+                    document.getElementById("pasteContent").innerHTML = `
+                    <h3>Paste ID: ${data.id}</h3>
+                    <p>Private: ${data.is_private ? "Yes" : "No"}</p>
+                    <pre>${decryptedContent}</pre>
+                `;
+                } catch (error) {
+                    document.getElementById("pasteContent").innerHTML =
+                        `<p>Error: Unable to decrypt the content. Make sure you have the correct decryption key.</p>`;
+                }
+            }
+        </script>
+    </body>
+</html>

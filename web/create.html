@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Create Paste - QuackBin</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+        <style>
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+            }
+            h1 {
+                color: #61dafb;
+            }
+            textarea {
+                width: 100%;
+                height: 200px;
+                background-color: #2d2d2d;
+                border: 1px solid #3e3e3e;
+                color: #d4d4d4;
+                padding: 10px;
+                margin-bottom: 20px; /* Increased margin */
+                font-family: "Courier New", Courier, monospace;
+            }
+            input[type="password"] {
+                width: calc(100% - 22px);
+                height: 20px;
+                background-color: #2d2d2d;
+                border: 1px solid #3e3e3e;
+                color: #d4d4d4;
+                padding: 10px;
+                margin-bottom: 10px;
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            }
+            button {
+                background-color: #61dafb;
+                color: #1e1e1e;
+                border: none;
+                padding: 10px 20px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+                margin-top: 10px; /* Added margin */
+            }
+            button:hover {
+                background-color: #4fa8d5;
+            }
+            #result {
+                display: none;
+                margin-top: 20px;
+                padding: 10px;
+                border: 1px solid #3e3e3e;
+                background-color: #2d2d2d;
+            }
+            nav {
+                margin-bottom: 20px;
+            }
+            nav a {
+                color: #61dafb;
+                text-decoration: none;
+                margin-right: 10px;
+            }
+            nav a:hover {
+                text-decoration: underline;
+            }
+            .password-input {
+                display: none;
+                margin-top: 10px;
+            }
+            input[type="checkbox"] {
+                margin-right: 5px;
+            }
+            label {
+                color: #d4d4d4;
+            }
+            .checkbox-container {
+                margin-bottom: 10px; /* Added margin */
+            }
+        </style>
+    </head>
+    <body>
+        <nav><a href="/">Create Paste</a> | <a href="/read">Read Paste</a></nav>
+        <h1>QuackBin 🦆</h1>
+        <textarea
+            id="pasteContent"
+            placeholder="Enter your paste content here"
+        ></textarea>
+        <div class="checkbox-container">
+            <input
+                type="checkbox"
+                id="isPrivate"
+                onchange="togglePasswordInput()"
+            />
+            <label for="isPrivate">Private Paste</label>
+        </div>
+        <div id="passwordInput" class="password-input">
+            <input
+                type="password"
+                id="pastePassword"
+                placeholder="Enter password for private paste"
+            />
+        </div>
+        <button onclick="createPaste()">Create Paste</button>
+        <div id="result"></div>
+        <script>
+            function togglePasswordInput() {
+                const passwordInput = document.getElementById("passwordInput");
+                passwordInput.style.display = document.getElementById(
+                    "isPrivate",
+                ).checked
+                    ? "block"
+                    : "none";
+            }
+
+            function generateKey() {
+                return CryptoJS.lib.WordArray.random(256 / 8).toString();
+            }
+
+            function encrypt(content, key) {
+                return CryptoJS.AES.encrypt(content, key).toString();
+            }
+
+            async function createPaste() {
+                const content = document.getElementById("pasteContent").value;
+                const isPrivate = document.getElementById("isPrivate").checked;
+                const password = document.getElementById("pastePassword").value;
+                const resultDiv = document.getElementById("result");
+
+                const key = generateKey();
+                const encryptedContent = encrypt(content, key);
+
+                try {
+                    const response = await fetch("/api/paste", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            content: encryptedContent,
+                            is_private: isPrivate,
+                            password: isPrivate
+                                ? CryptoJS.SHA256(password).toString()
+                                : null,
+                        }),
+                    });
+                    const data = await response.json();
+                    const shareUrl = `${window.location.origin}/read?id=${data.id}#${key}`;
+                    resultDiv.innerHTML = `
+                    <h3>Paste Created</h3>
+                    <p>ID: ${data.id}</p>
+                    <p>Private: ${data.is_private ? "Yes" : "No"}</p>
+                    <p>Share URL: <a href="${shareUrl}">${shareUrl}</a></p>
+                    <p><strong>Note:</strong> The decryption key is in the URL after the #. Keep it secret!</p>
+                `;
+                    resultDiv.style.display = "block";
+                } catch (error) {
+                    resultDiv.innerHTML = `<p>Error: ${error.message}</p>`;
+                    resultDiv.style.display = "block";
+                }
+            }
+        </script>
+    </body>
+</html>
